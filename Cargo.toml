@@ -7,7 +7,7 @@ license = "MIT OR Apache-2.0"
 description = "Simple/fast templating in Rust with no dependencies"
 homepage = "https://github.com/intelligentnet/simple-template"
 repository = "https://github.com/intelligentnet/simple-template"
-keywords = ["templating"]
+keywords = ["template", "templating"]
 categories = ["web"]
 
 [dependencies]
