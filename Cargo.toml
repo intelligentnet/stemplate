@@ -1,0 +1,13 @@
+[package]
+name = "stemplate"
+version = "0.1.0"
+edition = "2021"
+authors = ["Chris Dipple <chris@intelligent-net.co.uk>"]
+license = "MIT OR Apache-2.0"
+description = "Simple/fast templating in Rust with no dependencies"
+homepage = "https://github.com/intelligentnet/simple-template"
+repository = "https://github.com/intelligentnet/simple-template"
+keywords = ["templating"]
+categories = ["web"]
+
+[dependencies]
