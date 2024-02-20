@@ -12,6 +12,5 @@ Features:
 7. Zero dependencies.
 8. Fast.
 
-Please read the `API documentation` __
-__ https://docs.rs/stemplate/
+Please read the `API documentation` https://docs.rs/stemplate/
 
