@@ -7,7 +7,7 @@ Features:
 2. Default values with :- syntax.
 3. Nesting of variables allowed (to 8 levels).
 4. Can use environment variables.
-5. Value lookup order: supplied HasHMap, Environment, Default (if supplied).
+5. Value lookup order: supplied HashMap, Environment, Default (if supplied).
 6. Plays nicely with serde HashMaps.
 7. Zero dependencies.
 8. Fast.

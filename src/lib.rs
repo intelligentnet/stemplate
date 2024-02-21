@@ -9,8 +9,9 @@ const END_DLIM: &str = "}";
 pub struct Template<'a> {
     // Stores (key, (start, end))
     replaces: Vec<(&'a str, (usize, usize))>,
-    template_str: &'a str,
+    expanded: &'a str,
     sdlim: &'a str,
+    edlim: &'a str
 }
 
 /// Class implementation
@@ -35,19 +36,19 @@ impl <'a> Template<'a> {
     /// // Nested variables where fullname = "${first:=Fred} ${last:=Bloggs}"
     /// Template::new("My name is ${fullname}");
     /// ```
-    pub fn new(template_str: &'a str) -> Self {
-        Template::new_delimit(template_str, START_DLIM, END_DLIM)
+    pub fn new(expanded: &'a str) -> Self {
+        Template::new_delimit(expanded, START_DLIM, END_DLIM)
     }
 
     /// Create a new template as above but choose different delimiters
     /// # Example
     /// use stemplate::Template;
     /// Template::new("My name is {%name%}", "{%", "%}");
-    pub fn new_delimit(template_str: &'a str, sdlim: &'a str, edlim: &'a str) -> Self {
-        let template_str = template_str.trim();
-        let mut template = Self { sdlim, replaces: Vec::new(), template_str };
+    pub fn new_delimit(expanded: &'a str, sdlim: &'a str, edlim: &'a str) -> Self {
+        let expanded = expanded.trim();
+        let mut template = Self { replaces: Vec::new(), expanded, sdlim, edlim };
 
-        if template_str.is_empty() {
+        if expanded.is_empty() {
             return template;
         }
 
@@ -56,14 +57,14 @@ impl <'a> Template<'a> {
         // Current position in the format string
         let mut cursor = 0;
 
-        while cursor <= template_str.len() {
-            if let Some(start) = template_str[cursor..].find(sdlim) {
+        while cursor <= expanded.len() {
+            if let Some(start) = expanded[cursor..].find(sdlim) {
                 let start = start + cursor;
-                if let Some(end) = template_str[start..].find(edlim) {
+                if let Some(end) = expanded[start..].find(edlim) {
                     let end = end + start;
                     replaces.push((
                         // The extracted key
-                        &template_str[(start + sdlim.len())..end],
+                        &expanded[(start + sdlim.len())..end],
                         (start, (end + edlim.len())),
                     ));
 
@@ -76,7 +77,7 @@ impl <'a> Template<'a> {
             } else {
                 replaces.push((
                     // The extracted key
-                    &template_str[cursor..cursor], (cursor, cursor),
+                    &expanded[cursor..cursor], (cursor, cursor),
                 ));
                 break;
             }
@@ -161,7 +162,7 @@ impl <'a> Template<'a> {
         }
 
         let replaces = &self.replaces;
-        let template_str = &self.template_str;
+        let expanded = &self.expanded;
         // Calculate the size of the text to be added (vs) and amount of space
         // the keys take up in the original text (ks)
         let (ks, vs) = replaces.iter().fold((0, 0), |(ka, va), (k, _)| {
@@ -180,12 +181,12 @@ impl <'a> Template<'a> {
             }
         });
 
-        let final_len = (template_str.len() - (self.sdlim.len() * replaces.len())) + vs - ks;
+        let final_len = (expanded.len() - (self.sdlim.len() * replaces.len())) + vs - ks;
         let mut output = String::with_capacity(final_len);
         let mut cursor: usize = 0;
 
         for (key, (start, end)) in replaces.iter() {
-            output.push_str(&template_str[cursor..*start]);
+            output.push_str(&expanded[cursor..*start]);
             // Unwrapping is be safe at this point
             match vars.get(key) {
                 Some(v) => {
@@ -209,12 +210,12 @@ impl <'a> Template<'a> {
         }
 
         // If there's more text after the `${}`
-        if cursor < template_str.len() {
-            output.push_str(&template_str[cursor..]);
+        if cursor < expanded.len() {
+            output.push_str(&expanded[cursor..]);
         }
 
         if level < 8 && output.contains(self.sdlim) {
-            output = Template::new(&output).recursive_render(vars, level + 1);
+            output = Template::new_delimit(&output, self.sdlim, self.edlim).recursive_render(vars, level + 1);
         }
 
         output
@@ -379,9 +380,11 @@ mod tests {
     fn alt_delimeters() {
         let mut args = HashMap::new();
         args.insert("dog", "woofers");
+        args.insert("cat", "{cat_name:=moggy} that says {cat_noise}");
+        args.insert("cat_noise", "meeow");
 
-        let s = Template::new_delimit("{dog}", "{", "}").render(&args);
+        let s = Template::new_delimit("My dog {dog} has a friend {cat}", "{", "}").render(&args);
 
-        assert_eq!(s, "woofers");
+        assert_eq!(s, "My dog woofers has a friend moggy that says meeow");
     }
 }
