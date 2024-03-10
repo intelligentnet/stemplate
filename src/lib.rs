@@ -138,6 +138,12 @@ impl <'a> Template<'a> {
     /// // Using Googles LLM API. GEMINI_URL contains other env variables
     /// let url: String = Template::new_delimit("{GEMINI_URL}", "{", "}").render_env();
     /// ```
+    /// # Example
+    /// ```
+    /// use stemplate::Template;
+    /// let s = Template::new("File contains: ${!test.inc}").render_env();
+    /// //assert_eq!(s, "File contains: inc");
+    /// ```
     pub fn render_env(&self) -> String {
         let vars: HashMap<&str, String> = HashMap::new();
 
@@ -163,26 +169,7 @@ impl <'a> Template<'a> {
 
         let replaces = &self.replaces;
         let expanded = &self.expanded;
-        // Calculate the size of the text to be added (vs) and amount of space
-        // the keys take up in the original text (ks)
-        let (ks, vs) = replaces.iter().fold((0, 0), |(ka, va), (k, _)| {
-            match vars.get(k) {
-                Some(v) => {
-                    (ka + k.len(), va + v.as_ref().len())
-                },
-                None =>  {
-                    match std::env::var(k) {
-                        Ok(v) => {
-                            (ka + k.len(), va + v.len())
-                        },
-                        Err(_) => (ka + k.len(), va)
-                    }
-                }
-            }
-        });
-
-        let final_len = (expanded.len() - (self.sdlim.len() * replaces.len())) + vs - ks;
-        let mut output = String::with_capacity(final_len);
+        let mut output = String::new();
         let mut cursor: usize = 0;
 
         for (key, (start, end)) in replaces.iter() {
@@ -198,6 +185,19 @@ impl <'a> Template<'a> {
                         output.push_str(&default(key, ":-", vars));
                     } else if key.contains(":=") {
                         output.push_str(&default(key, ":=", vars));
+                    } else if key.starts_with('!') && key.ends_with(".inc") {
+                        match std::fs::read_to_string(&key[1..]) {
+                            Ok(content) => {
+                                let content = content.trim();
+                                if content.contains(self.sdlim) {
+                                    let content = Template::new_delimit(&content, self.sdlim, self.edlim).recursive_render(vars, level + 1);
+                                    output.push_str(content.trim().as_ref())
+                                } else {
+                                    output.push_str(content.trim().as_ref())
+                                }
+                            },
+                            Err(_) => output.push_str("".as_ref())
+                        }
                     } else {
                         match std::env::var(key) {
                             Ok(v) => output.push_str(v.as_ref()),
@@ -386,5 +386,21 @@ mod tests {
         let s = Template::new_delimit("My dog {dog} has a friend {cat}", "{", "}").render(&args);
 
         assert_eq!(s, "My dog woofers has a friend moggy that says meeow");
+    }
+
+    #[test]
+    fn include() {
+        let mut args = HashMap::new();
+        args.insert("example", "text");
+        let s = Template::new("File contains: ${!test.inc}").render(&args);
+
+        assert_eq!(s, "File contains: inc text");
+    }
+
+    #[test]
+    fn dont_include() {
+        let s = Template::new("${!/etc/passwd}").render_env();
+
+        assert_eq!(s, "");
     }
 }

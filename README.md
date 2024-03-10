@@ -9,8 +9,9 @@ Features:
 4. Can use environment variables.
 5. Value lookup order: supplied HashMap, Environment, Default (if supplied).
 6. Plays nicely with serde HashMaps.
-7. Zero dependencies.
-8. Fast.
+7. Can include files (which can nest). With .inc extension only.
+8. Zero dependencies.
+9. Fast.
 
 Please read the `API documentation` https://docs.rs/stemplate/
 
