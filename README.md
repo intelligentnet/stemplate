@@ -12,6 +12,7 @@ Features:
 7. Can include files (which can nest). With .inc extension only.
 8. Zero dependencies.
 9. Fast.
+10. Can use multi-valued variables for lists etc. (only through HashMap)
 
 Please read the `API documentation` https://docs.rs/stemplate/
 

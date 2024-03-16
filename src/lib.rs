@@ -96,6 +96,21 @@ impl <'a> Template<'a> {
     /// let s = template.render(&args);
     /// assert_eq!(s, "My name is Fred");
     /// ```
+    /// # Example
+    /// ```
+    /// // Multi-valued example use in *<delimit>
+    /// // Delimit is optional and is newline by default
+    /// // This is useful for lists etc.
+    /// // Normally HTML markup would be included
+    /// use std::collections::HashMap;
+    /// use stemplate::Template;
+    /// let mut args = HashMap::new();
+    /// args.insert("dog", "woofers|rex|freddy");
+    /// args.insert("cat", "kitty|moggi");
+    /// args.insert("pets", "${dog} and ${cat}");
+    /// let s = Template::new("${*|pets}").render(&args);
+    /// assert_eq!(s, "woofers and kitty|rex and moggi|");
+    /// ```
     pub fn render<V: AsRef<str> + std::fmt::Debug + std::string::ToString>(&self, vars: &HashMap<&str, V>) -> String {
         self.recursive_render(vars, 0)
     }
@@ -167,43 +182,92 @@ impl <'a> Template<'a> {
             }
         }
 
+        fn other_sources<V: AsRef<str> + std::fmt::Debug + std::string::ToString>(key: &str, vars: &HashMap<&str, V>) -> String {
+            // Implement default values if provided
+            if key.contains(":-") {
+                default(key, ":-", vars)
+            } else if key.contains(":=") {
+                default(key, ":=", vars)
+            // Okay, try environment then
+            } else {
+                match std::env::var(key) {
+                    Ok(v) => v.trim().into(),
+                    Err(_) => "".into()
+                }
+            }
+        }
+
         let replaces = &self.replaces;
         let expanded = &self.expanded;
         let mut output = String::new();
         let mut cursor: usize = 0;
 
+        // Only used for Multi-values
+        let mut mvv: HashMap<&str, Vec<String>> = HashMap::new();
+        let mut vars2: HashMap<&str, String> = HashMap::new();
+
         for (key, (start, end)) in replaces.iter() {
             output.push_str(&expanded[cursor..*start]);
-            // Unwrapping is be safe at this point
-            match vars.get(key) {
-                Some(v) => {
-                    output.push_str(v.as_ref())
-                },
-                None => {
-                    // Implement default values if provided
-                    if key.contains(":-") {
-                        output.push_str(&default(key, ":-", vars));
-                    } else if key.contains(":=") {
-                        output.push_str(&default(key, ":=", vars));
-                    } else if key.starts_with('!') && key.ends_with(".inc") {
-                        match std::fs::read_to_string(&key[1..]) {
-                            Ok(content) => {
-                                let content = content.trim();
-                                if content.contains(self.sdlim) {
-                                    let content = Template::new_delimit(&content, self.sdlim, self.edlim).recursive_render(vars, level + 1);
-                                    output.push_str(content.trim().as_ref())
-                                } else {
-                                    output.push_str(content.trim().as_ref())
-                                }
-                            },
-                            Err(_) => output.push_str("".as_ref())
+            // Read from file?
+            if key.starts_with('!') && key.ends_with(".inc") {
+                match std::fs::read_to_string(&key[1..]) {
+                    Ok(content) => {
+                        let mut content = content.trim().to_string();
+
+                        if content.contains(self.sdlim) {
+                            content = Template::new_delimit(&content, self.sdlim, self.edlim).recursive_render(vars, level + 1);
                         }
-                    } else {
-                        match std::env::var(key) {
-                            Ok(v) => output.push_str(v.as_ref()),
-                            Err(_) => output.push_str("".as_ref())
+
+                        output.push_str(content.trim().as_ref())
+                    },
+                    Err(_) => output.push_str("".as_ref())
+                }
+            // Multi Value substitution
+            } else if let Some(mut key) = key.strip_prefix('*') {
+                let delim = if key.chars().next().unwrap().is_alphabetic() {
+                    "\n"
+                } else {
+                    let delim = &key[0..1];
+                    key = &key[1..];
+
+                    delim
+                };
+                if let Some(key) = vars.get(key) {
+                    let key = key.to_string();
+
+                    if mvv.is_empty() { // We only need to do this once
+                        vars2 = vars.iter()
+                            .map(|(k,v)| (*k, v.to_string()))
+                            .collect();
+                        for (key, v) in vars2.iter() {
+                            if v.to_string().contains('|') {
+                                mvv.insert(key, v.to_string().split('|').map(|i| i.trim().into()).collect());
+                            }
                         }
                     }
+                    let mi = mvv.iter()
+                        .filter(|(k,_)| key.contains(&format!("{}{k}{}", self.sdlim, self.edlim)))
+                        .map(|(_,v)| v.len())
+                        .min();
+                    if let Some(mi) = mi {
+                        for i in 0 .. mi {
+                            mvv.iter()
+                                .filter(|(k,v)| mi <= v.len() && key.contains(&format!("{}{k}{}", self.sdlim, self.edlim)))
+                                .for_each(|(k,v)| { vars2.insert(k, v[i].clone()); });
+                            let content = Template::new_delimit(&key, self.sdlim, self.edlim).recursive_render(&vars2, level + 1) + delim;
+                            output.push_str(content.as_ref())
+                        }
+                    }
+                }
+            } else {
+                let v = 
+                    match vars.get(key) {
+                        Some(v) => v.to_string(),
+                        None => other_sources(key, vars)
+                    };
+
+                if !v.to_string().contains('|') {
+                    output.push_str(v.trim().as_ref())
                 }
             }
             cursor = *end;
@@ -402,5 +466,29 @@ mod tests {
         let s = Template::new("${!/etc/passwd}").render_env();
 
         assert_eq!(s, "");
+    }
+
+    #[test]
+    fn many() {
+        let mut args = HashMap::new();
+        args.insert("dog", "woofers|rex");
+        args.insert("cat", "kitty|moggi|tiger");
+        args.insert("pets", "${dog} and ${cat}");
+
+        let s = Template::new("${*pets}").render(&args);
+
+        assert_eq!(s, "woofers and kitty\nrex and moggi\n");
+    }
+
+    #[test]
+    fn many_delim() {
+        let mut args = HashMap::new();
+        args.insert("dog", "woofers|rex");
+        args.insert("cat", "kitty|moggi");
+        args.insert("pets", "${dog} and ${cat}");
+
+        let s = Template::new("${*|pets}").render(&args);
+
+        assert_eq!(s, "woofers and kitty|rex and moggi|");
     }
 }
