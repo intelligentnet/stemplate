@@ -45,6 +45,23 @@ impl <'a> Template<'a> {
     /// use stemplate::Template;
     /// Template::new("My name is {%name%}", "{%", "%}");
     pub fn new_delimit(expanded: &'a str, sdlim: &'a str, edlim: &'a str) -> Self {
+        fn find_end(s: &str, sdlim: &str, edlim: &str) -> Option<usize> {
+            let mut level = 0;
+
+            for (i, c) in s.chars().enumerate() {
+                if sdlim.starts_with(c) && s[i..].starts_with(sdlim) {
+                    level += 1;
+                } else if edlim.starts_with(c) && s[i..].starts_with(edlim) {
+                    level -= 1;
+                    if level == 0 {
+                        return Some(i);
+                    }
+                }
+            }
+
+            None
+        }
+
         let expanded = expanded.trim();
         let mut template = Self { replaces: Vec::new(), expanded, sdlim, edlim };
 
@@ -60,7 +77,7 @@ impl <'a> Template<'a> {
         while cursor <= expanded.len() {
             if let Some(start) = expanded[cursor..].find(sdlim) {
                 let start = start + cursor;
-                if let Some(end) = expanded[start..].find(edlim) {
+                if let Some(end) = find_end(&expanded[start..], sdlim, edlim) {
                     let end = end + start;
                     replaces.push((
                         // The extracted key
@@ -171,7 +188,7 @@ impl <'a> Template<'a> {
             let bits: Vec<_> = key.split(delimiter).collect();
 
             match vars.get(bits[0]) {
-                Some(v) if !v.as_ref().is_empty() => 
+                Some(v) if !v.as_ref().is_empty() =>
                    v.to_string(),
                 _ => {
                    match std::env::var(bits[0]) {
@@ -414,6 +431,18 @@ mod tests {
         let s = Template::new(test).render(&args);
 
         assert_eq!(s, "William, why are you writing code at 2 AM again?");
+    }
+
+    #[test]
+    fn recursive_twice() {
+        let test: &str = "${content:-${first} and ${second}}";
+        let mut args = HashMap::new();
+        args.insert("first", "one");
+        args.insert("second", "two");
+
+        let s = Template::new(test).render(&args);
+
+        assert_eq!(s, "one and two");
     }
 
     #[test]

@@ -1,6 +1,6 @@
 # Yet Another Simple template engine
 
-Inspired by *nix shell and Java version from some years ago and some code influenced by other Rust templating engines.
+Inspired by %nix shell and Java version from some years ago and some code influenced by other Rust templating engines.
 
 Features:
 1. Default delimiters "${" and "}". Can be overridden to anything.
