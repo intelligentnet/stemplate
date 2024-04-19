@@ -12,7 +12,10 @@ Features:
 7. Can include files (which can nest). With .inc extension only.
 8. Zero dependencies.
 9. Fast.
-10. Can use multi-valued variables for lists etc. (only through HashMap)
+10. Can use multi-valued variables for lists etc. (only through HashMap).
+11. Can check existence of a value and if true give it a default. Useful for 
+    HTML forms when variable has a particular value, and this value should
+    be the default selected value.
 
 Please read the `API documentation` https://docs.rs/stemplate/
 

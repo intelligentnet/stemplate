@@ -239,6 +239,27 @@ impl <'a> Template<'a> {
                     },
                     Err(_) => output.push_str("".as_ref())
                 }
+            // Exists with value test
+            } else if key.starts_with('?') && key.contains('=') {
+               let mut value: String = "".to_string();
+               let mut vd: Vec<&str> = key.split(":-").collect();
+
+               if vd.len() != 2 {
+                   vd = key.split(":=").collect();
+               }
+               if vd.len() == 2 {
+                   let lhs = &(vd[0])[1..];
+                   let vv: Vec<&str> = lhs.split('=').collect();
+
+                   if vv.len() == 2 {
+                       if let Some(v) = vars.get(vv[0]) {
+                           if v.to_string() == vv[1] {
+                               value = vd[1].trim().to_string();
+                           }
+                       }
+                   }
+                   output.push_str(value.as_ref())
+               }
             // Multi Value substitution
             } else if let Some(mut key) = key.strip_prefix('*') {
                 let delim = if key.chars().next().unwrap().is_alphabetic() {
@@ -519,5 +540,16 @@ mod tests {
         let s = Template::new("${*|pets}").render(&args);
 
         assert_eq!(s, "woofers and kitty|rex and moggi|");
+    }
+
+    #[test]
+    fn exists() {
+        let mut args = HashMap::new();
+        args.insert("v1", "aaa");
+        args.insert("v2", "bbb");
+        args.insert("value", "text");
+        let s = Template::new("${?value=text:-${v1}${v2}}").render(&args);
+
+        assert_eq!(s, "aaabbb");
     }
 }
