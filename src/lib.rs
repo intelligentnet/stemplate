@@ -43,7 +43,7 @@ impl <'a> Template<'a> {
     /// Create a new template as above but choose different delimiters
     /// # Example
     /// use stemplate::Template;
-    /// Template::new("My name is {%name%}", "{%", "%}");
+    /// Template::new_delimit("My name is {%name%}", "{%", "%}");
     pub fn new_delimit(expanded: &'a str, sdlim: &'a str, edlim: &'a str) -> Self {
         fn find_end(s: &str, sdlim: &str, edlim: &str) -> Option<usize> {
             let mut level = 0;
@@ -222,6 +222,7 @@ impl <'a> Template<'a> {
         // Only used for Multi-values
         let mut mvv: HashMap<&str, Vec<String>> = HashMap::new();
         let mut vars2: HashMap<&str, String> = HashMap::new();
+        let mut vc: HashMap<&str, usize> = HashMap::new();
 
         for (key, (start, end)) in replaces.iter() {
             output.push_str(&expanded[cursor..*start]);
@@ -300,7 +301,20 @@ impl <'a> Template<'a> {
             } else {
                 let v = 
                     match vars.get(key) {
-                        Some(v) => v.to_string(),
+                        Some(v) => {
+                            let v = v.to_string();
+
+                            if v.contains('#') {
+                                let vs: Vec<&str> = v.split('#').collect();
+                                let _ = vc.entry(key)
+                                    .and_modify(|v| { *v = (*v + 1) % vs.len(); })
+                                    .or_insert(0);
+                                let i = vc.get(key).unwrap();
+                                vs[*i].to_string()
+                            } else {
+                                v
+                            }
+                        },
                         None => other_sources(key, vars)
                     };
 
@@ -391,6 +405,17 @@ mod tests {
         let s = Template::new(test).render(&args);
 
         assert_eq!(s, "Hello, Charles. You remind me of another Charles.");
+    }
+
+    #[test]
+    fn two_values() {
+        let test: &str = "Hello, ${name}. You remind me of another ${name}.";
+        let mut args = HashMap::new();
+        args.insert("name", "Charles#Harry");
+
+        let s = Template::new(test).render(&args);
+
+        assert_eq!(s, "Hello, Charles. You remind me of another Harry.");
     }
 
     #[test]
@@ -500,6 +525,18 @@ mod tests {
         let s = Template::new_delimit("My dog {dog} has a friend {cat}", "{", "}").render(&args);
 
         assert_eq!(s, "My dog woofers has a friend moggy that says meeow");
+    }
+
+    #[test]
+    fn alt_delimeters2() {
+        let mut args = HashMap::new();
+        args.insert("dog", "{ good } woofers { eh }");
+        args.insert("cat", "${{cat_name:=moggy}} that says ${{cat_noise}}");
+        args.insert("cat_noise", "meeow");
+
+        let s = Template::new_delimit("My dog ${{dog}} has a friend {well says he does} ${{cat}}", "${{", "}}").render(&args);
+
+        assert_eq!(s, "My dog { good } woofers { eh } has a friend {well says he does} moggy that says meeow");
     }
 
     #[test]

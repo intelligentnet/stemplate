@@ -16,6 +16,7 @@ Features:
 11. Can check existence of a value and if true give it a default. Useful for 
     HTML forms when variable has a particular value, and this value should
     be the default selected value.
+12. Provide a list of values, '#' separated, and instantiate multiple instances of variable (at same recursive depth), with successive values.
 
 Please read the `API documentation` https://docs.rs/stemplate/
 
