@@ -278,10 +278,10 @@ impl <'a> Template<'a> {
                         vars2 = vars.iter()
                             .map(|(k,v)| (*k, v.to_string()))
                             .collect();
-                        for (key, v) in vars2.iter() {
+                        for (k, v) in vars2.iter() {
                             if v.to_string().contains('|') {
                                 let val = v.to_string().split('|').map(|i| i.trim().into()).collect();
-                                mvv.insert(key, val);
+                                mvv.insert(k, val);
                             }
                         }
                     }
@@ -301,6 +301,11 @@ impl <'a> Template<'a> {
                             }
 
                             output.push_str(content.as_ref())
+                        }
+                    } else {
+                        let k = &key[self.sdlim.len()..key.len()-self.edlim.len()];
+                        if vars2.contains_key(k) {
+                            output.push_str(vars2.get(k).unwrap());
                         }
                     }
                 }
@@ -596,6 +601,17 @@ mod tests {
         let s = Template::new("I love ${*;pets} a lot").render(&args);
 
         assert_eq!(s, "I love woofers, kitty and cuddly;rex, moggi and cuddly a lot");
+    }
+
+    #[test]
+    fn many_delim3() {
+        let mut args = HashMap::new();
+        args.insert("marg", "arg0");
+        args.insert("top", "${marg}");
+
+        let s = Template::new("[${*,top}]").render(&args);
+
+        assert_eq!(s, "[arg0]");
     }
 
     #[test]
