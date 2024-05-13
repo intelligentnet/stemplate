@@ -126,7 +126,7 @@ impl <'a> Template<'a> {
     /// args.insert("cat", "kitty|moggi");
     /// args.insert("pets", "${dog} and ${cat}");
     /// let s = Template::new("${*|pets}").render(&args);
-    /// assert_eq!(s, "woofers and kitty|rex and moggi|");
+    /// assert_eq!(s, "woofers and kitty|rex and moggi");
     /// ```
     pub fn render<V: AsRef<str> + std::fmt::Debug + std::string::ToString>(&self, vars: &HashMap<&str, V>) -> String {
         self.recursive_render(vars, 0)
@@ -280,7 +280,8 @@ impl <'a> Template<'a> {
                             .collect();
                         for (key, v) in vars2.iter() {
                             if v.to_string().contains('|') {
-                                mvv.insert(key, v.to_string().split('|').map(|i| i.trim().into()).collect());
+                                let val = v.to_string().split('|').map(|i| i.trim().into()).collect();
+                                mvv.insert(key, val);
                             }
                         }
                     }
@@ -293,7 +294,12 @@ impl <'a> Template<'a> {
                             mvv.iter()
                                 .filter(|(k,v)| mi <= v.len() && key.contains(&format!("{}{k}{}", self.sdlim, self.edlim)))
                                 .for_each(|(k,v)| { vars2.insert(k, v[i].clone()); });
-                            let content = Template::new_delimit(&key, self.sdlim, self.edlim).recursive_render(&vars2, level + 1) + delim;
+                            let mut content = Template::new_delimit(&key, self.sdlim, self.edlim).recursive_render(&vars2, level + 1) + delim;
+
+                            if i == mi - 1 {
+                                content = content[..content.len()-1].to_string();
+                            }
+
                             output.push_str(content.as_ref())
                         }
                     }
@@ -564,7 +570,7 @@ mod tests {
 
         let s = Template::new("${*pets}").render(&args);
 
-        assert_eq!(s, "woofers and kitty\nrex and moggi\n");
+        assert_eq!(s, "woofers and kitty\nrex and moggi");
     }
 
     #[test]
@@ -576,7 +582,20 @@ mod tests {
 
         let s = Template::new("${*|pets}").render(&args);
 
-        assert_eq!(s, "woofers and kitty|rex and moggi|");
+        assert_eq!(s, "woofers and kitty|rex and moggi");
+    }
+
+    #[test]
+    fn many_delim2() {
+        let mut args = HashMap::new();
+        args.insert("dog", "woofers|rex");
+        args.insert("cat", "kitty|moggi");
+        args.insert("rabbit", "cuddly");
+        args.insert("pets", "${dog}, ${cat} and ${rabbit}");
+
+        let s = Template::new("I love ${*;pets} a lot").render(&args);
+
+        assert_eq!(s, "I love woofers, kitty and cuddly;rex, moggi and cuddly a lot");
     }
 
     #[test]
