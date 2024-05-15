@@ -279,8 +279,9 @@ impl <'a> Template<'a> {
                             .map(|(k,v)| (*k, v.to_string()))
                             .collect();
                         for (k, v) in vars2.iter() {
-                            if v.to_string().contains('|') {
-                                let val = v.to_string().split('|').map(|i| i.trim().into()).collect();
+                            let v = v.to_string();
+                            if v.contains('|') {
+                                let val = v.split('|').map(|i| i.trim().into()).collect();
                                 mvv.insert(k, val);
                             }
                         }
@@ -303,10 +304,10 @@ impl <'a> Template<'a> {
                             output.push_str(content.as_ref())
                         }
                     } else {
-                        let k = &key[self.sdlim.len()..key.len()-self.edlim.len()];
-                        if vars2.contains_key(k) {
-                            output.push_str(vars2.get(k).unwrap());
-                        }
+                            let mut content = Template::new_delimit(&key, self.sdlim, self.edlim).recursive_render(&vars2, level + 1) + delim;
+                            content = content[..content.len()-1].to_string();
+
+                            output.push_str(content.as_ref())
                     }
                 }
             } else {
@@ -612,6 +613,19 @@ mod tests {
         let s = Template::new("[${*,top}]").render(&args);
 
         assert_eq!(s, "[arg0]");
+    }
+
+    #[test]
+    fn many_delim4() {
+        let mut args = HashMap::new();
+        args.insert("marg", "arg0");
+        args.insert("mand_args", r#""${marg}""#);
+        args.insert("func", r#"[${*,mand_args}]"#);
+
+        let s = Template::new("${func}").render(&args);
+        //let s = Template::new(r#"[${*,mand_args}]"#).render(&args);
+
+        assert_eq!(s, "[\"arg0\"]");
     }
 
     #[test]
