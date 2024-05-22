@@ -322,12 +322,18 @@ impl <'a> Template<'a> {
                             if v.contains('#') {
                                 let re = Regex::new(r"\w#\w").unwrap();
                                 if re.is_match(&v) {
-                                    let vs: Vec<&str> = v.split('#').collect();
-                                    let _ = vc.entry(key)
-                                        .and_modify(|v| { *v = (*v + 1) % vs.len(); })
-                                        .or_insert(0);
-                                    let i = vc.get(key).unwrap();
-                                    vs[*i].to_string()
+                                    let re2 = Regex::new(r"\s#").unwrap();
+                                    let re3 = Regex::new(r"#\s").unwrap();
+                                    if !re2.is_match(&v) && !re3.is_match(&v) {
+                                        let vs: Vec<&str> = v.split('#').collect();
+                                        let _ = vc.entry(key)
+                                            .and_modify(|v| { *v = (*v + 1) % vs.len(); })
+                                            .or_insert(0);
+                                        let i = vc.get(key).unwrap();
+                                        vs[*i].to_string()
+                                    } else {
+                                        v
+                                    }
                                 } else {
                                     v
                                 }
