@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use regex::Regex;
 
 // Default delimiters
 const START_DLIM: &str = "${";
@@ -18,7 +17,7 @@ pub struct Template<'a> {
 /// Class implementation
 impl <'a> Template<'a> {
     /// Create a new template using a string containing ${..} variables
-    /// Note: will only dereference 8 nested levels of variables
+    /// Note: will only dereference 16 nested levels of variables
     /// Simple default value;
     /// # Example
     /// ```
@@ -225,6 +224,7 @@ impl <'a> Template<'a> {
         let mut vars2: HashMap<&str, String> = HashMap::new();
         let mut vc: HashMap<&str, usize> = HashMap::new();
         let mut is_single = true;
+        let mut is_literal = false;
 
         for (key, (start, end)) in replaces.iter() {
             output.push_str(&expanded[cursor..*start]);
@@ -313,51 +313,42 @@ impl <'a> Template<'a> {
                             output.push_str(content.as_ref())
                     }
                 }
+            } else if let Some(key) = key.strip_prefix('=') {
+                if let Some(content) = vars.get(key) {
+                    is_literal = true;
+                    output.push_str(content.as_ref())
+                }
+            } else if let Some(key) = key.strip_prefix('#') {
+                if let Some(v) = vars.get(key) {
+                    let v = v.to_string();
+                    let vs: Vec<&str> = v.split('|').collect();
+                    let _ = vc.entry(key)
+                        .and_modify(|v| { *v = (*v + 1) % vs.len(); })
+                        .or_insert(0);
+                    let i = vc.get(key).unwrap();
+                    output.push_str(vs[*i])
+                }
             } else {
                 let v = 
                     match vars.get(key) {
-                        Some(v) => {
-                            let v = v.to_string();
-
-                            if v.contains('#') {
-                                let re = Regex::new(r"\w#\w").unwrap();
-                                if re.is_match(&v) {
-                                    let re2 = Regex::new(r"\s#").unwrap();
-                                    let re3 = Regex::new(r"#\s").unwrap();
-                                    if !re2.is_match(&v) && !re3.is_match(&v) {
-                                        let vs: Vec<&str> = v.split('#').collect();
-                                        let _ = vc.entry(key)
-                                            .and_modify(|v| { *v = (*v + 1) % vs.len(); })
-                                            .or_insert(0);
-                                        let i = vc.get(key).unwrap();
-                                        vs[*i].to_string()
-                                    } else {
-                                        v
-                                    }
-                                } else {
-                                    v
-                                }
-                            } else {
-                                v
-                            }
-                        },
+                        Some(v) => v.to_string(),
                         None => other_sources(key, vars)
                     };
 
-                if is_single || !v.to_string().contains('|') {
+                if is_single || !v.contains('|') {
                     output.push_str(v.trim().as_ref())
                 }
             }
             cursor = *end;
         }
 
+        if !is_literal && level < 16 && output.contains(self.sdlim) {
+            output = Template::new_delimit(&output, self.sdlim, self.edlim).recursive_render(vars, level + 1);
+        }
+
         // If there's more text after the `${}`
         if cursor < expanded.len() {
             output.push_str(&expanded[cursor..]);
-        }
-
-        if level < 8 && output.contains(self.sdlim) {
-            output = Template::new_delimit(&output, self.sdlim, self.edlim).recursive_render(vars, level + 1);
         }
 
         output
@@ -435,9 +426,9 @@ mod tests {
 
     #[test]
     fn two_values() {
-        let test: &str = "Hello, ${name}. You remind me of another ${name}.";
+        let test: &str = "Hello, ${#name}. You remind me of another ${#name}.";
         let mut args = HashMap::new();
-        args.insert("name", "Charles#Harry");
+        args.insert("name", "Charles|Harry");
 
         let s = Template::new(test).render(&args);
 
@@ -657,6 +648,7 @@ mod tests {
     fn code() {
         let mut args = HashMap::new();
 
+        // Code generate by llmclient
         let code = r####"
 Sure, here's a simple example of an HTTP proxy in Rust using the `hyper` and `tokio` crates:
     
@@ -706,5 +698,63 @@ Sure, here's a simple example of an HTTP proxy in Rust using the `hyper` and `to
         let s = Template::new(">>> ${code} <<<").render(&args);
 
         assert_eq!(s, format!(">>> {} <<<", code.trim()));
+    }
+
+    #[test]
+    fn code_literal() {
+        let mut args = HashMap::new();
+
+        // Code generate by llmclient
+        let code = r####"
+Sure, here's a simple example of an HTTP proxy in Rust using the `hyper` and `tokio` crates:
+    
+    # Cargo.toml
+    [package]
+    name = "http_proxy"
+    version = "0.1.0"
+    edition = "2018"
+    
+    [dependencies]
+    hyper = "0.14"
+    tokio = { version = "1", features = ["full"] }
+    ${fred:=FRED}
+    
+    // src/main.rs
+    use hyper::{Client, Request, Response, Body, Server};
+    use hyper::service::{make_service_fn, service_fn};
+    use std::convert::Infallible;
+    use tokio::runtime::Runtime;
+    
+    async fn proxy(req: Request<Body>) -> Result<Response<Body>, hyper::Error> {
+        let client = Client::new();
+        client.request(req).await
+    }
+    
+    #[tokio::main]
+    async fn main() {
+        let make_svc = make_service_fn(|_conn| {
+            async {
+                Ok::<_, Infallible>(service_fn(proxy))
+            }
+        });
+    
+        let addr = ([127, 0, 0, 1], 3000).into();
+        let server = Server::bind(&addr).serve(make_svc);
+    
+        println!("Listening on http://{}", addr);
+    
+        if let Err(e) = server.await {
+            eprintln!("server error: {}", e);
+        }
+    }
+    
+    To run this code, ensure you have Rust and Cargo installed, then create a new project, add the dependencies in `Cargo.toml`, and replace the contents of `src/main.rs` with the provided code.
+        "####;
+
+        args.insert("code", code);
+        args.insert("something", "SOMETHING");
+        let s = Template::new(">>> ${=code} ${something} <<<").render(&args);
+
+        assert_eq!(s, format!(">>> {} SOMETHING <<<", code));
     }
 }
