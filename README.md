@@ -31,6 +31,7 @@ in "default value" being added to the output.
 The contents of the variable will normally be recursive checked for further
 embedded variables, to a depth of 16 levels. Values will be trimed of leading and following whitespace by default.
 
+```
 The variable name may be preceded by a modifier. Modifiers are :
 '=' - Do not recursively check the content of the variables for further
       expansion or trim the spaces.
@@ -41,5 +42,6 @@ The variable name may be preceded by a modifier. Modifiers are :
 '?' - Condition, if variable has value then use default (usefule for drop
       down lists in HTML for example, to indicate selected item)
 '#' - Simple Multiple values are supplied, again separated by '|' see test case.
+```
 
 Please see the `API documentation` https://docs.rs/stemplate/ and test cases.
