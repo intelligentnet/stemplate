@@ -21,7 +21,7 @@ Features:
     code or example.
 
 
-Normal variables with default delimiters would be: ${variable_name} and 
+Normal variables with default delimiters would be: "${variable_name}" and 
 will be looked up in supplied HashMap. If not found in the HashMap then the 
 environment will be queried. If the value is not found in either place, then 
 a default value can be used, if supplied. A default value would
